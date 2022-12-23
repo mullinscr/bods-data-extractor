@@ -291,7 +291,7 @@ class TimetableExtractor:
 
                             la_code = xmlDataExtractor.extract_la_code(xml_data)
                             xml_output.append(la_code)
-
+                            
                             #reset read cursor
                             thefile.seek(0)
 
@@ -311,9 +311,13 @@ class TimetableExtractor:
 
                                 vehicle_journey_json = xml_json['TransXChange']['VehicleJourneys']['VehicleJourney']
                                 xml_output.append(vehicle_journey_json)
+                                
+                                tracks_json= xml_json['TransXChange']['RouteSections']['RouteSection'] #/RouteLink/Track/Mapping/Location/Translation']#['RouteLink']['Track']['Mapping']['Location']['Translation']
+                                xml_output.append(tracks_json)
 
                                 services_json = xml_json['TransXChange']['Services']['Service']
                                 xml_output.append(services_json)
+                                                      
 
                             else:
                                 pass
@@ -331,7 +335,7 @@ class TimetableExtractor:
         #if stop level data is requested, then need the additional columns that contain jsons of the stop level info        
         if self.stop_level == True:
             output_df = pd.DataFrame(output
-                                 , columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse', 'OperatingDays', 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code','journey_pattern_json', 'vehicle_journey_json','services_json']
+                                 , columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse', 'OperatingDays', 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code','journey_pattern_json', 'vehicle_journey_json','tracks_json','services_json']
                                  )
         else:
             output_df = pd.DataFrame(output
@@ -427,7 +431,7 @@ class TimetableExtractor:
 
             la_code = xmlDataExtractor.extract_la_code(xml_data)
             xml_output.append(la_code)
-
+            
             #if stop level data is requested, then need the additional columns that contain jsons of the stop level info        
             if self.stop_level == True:
 
@@ -444,9 +448,14 @@ class TimetableExtractor:
 
                 vehicle_journey_json = xml_json['TransXChange']['VehicleJourneys']['VehicleJourney']
                 xml_output.append(vehicle_journey_json)
+        
+                tracks_json= xml_json['TransXChange']['RouteSections']['RouteSection']#['RouteLink']['Track']['Mapping']['Location']['Translation']
+                xml_output.append(tracks_json)
 
                 services_json = xml_json['TransXChange']['Services']['Service']
                 xml_output.append(services_json)
+                
+                
 
             else:
                 pass
@@ -454,7 +463,7 @@ class TimetableExtractor:
         output_df = pd.DataFrame(xml_output).T
 
         if self.stop_level == True:
-            output_df.columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse','OperatingDays', 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code','journey_pattern_json', 'vehicle_journey_json','services_json']
+            output_df.columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse','OperatingDays', 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code','journey_pattern_json', 'vehicle_journey_json','tracks_json','services_json']
         else:
             output_df.columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse','OperatingDays', 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code']
 
@@ -570,7 +579,7 @@ class TimetableExtractor:
 
         
         if self.stop_level == True:
-            self.service_line_extract = self.service_line_extract_with_stop_level_json.drop(['journey_pattern_json','vehicle_journey_json','services_json','la_code'],axis=1).drop_duplicates()
+            self.service_line_extract = self.service_line_extract_with_stop_level_json.drop(['journey_pattern_json','vehicle_journey_json','tracks_json','services_json','la_code'],axis=1).drop_duplicates()
         else:
             self.service_line_extract = self.service_line_extract_with_stop_level_json.drop(['la_code'],axis=1).drop_duplicates()
         
@@ -627,6 +636,7 @@ class TimetableExtractor:
         stop_from = []
         stop_to = []
         sequence_number = []
+        operating_days=[]
         timingstatus = []
 
         #loop through the JourneyPatternSection elements within the JourneyPatternSections frame
@@ -696,6 +706,40 @@ class TimetableExtractor:
             }
 
         return vehicle_journey_dict
+
+    def unwrap_track_json(self, json):
+
+        """
+        For each record in the service line level table, this function extracts vehicle journey 
+        (specific vehicle depature times) 
+        stop level info by unwrapping the json like structure in the line level table.
+        This is used by the produce_stop_level_df_vehicle function to create a dataframe 
+        of vehicle stop level info.
+        """
+#['RouteLink']['Track']['Mapping']['Location']['Translation']
+
+        #initiate empty lists for results to be appended to
+        Easting = []
+        Northing = []
+        Longitude = []
+        Latitude = []
+
+        #loop through the mapping elements within the track's frame
+        for v in range(0,len(json)):
+            Easting.append(json[v]['Easting'])
+            Northing.append(json[v]['Northing'])
+            Longitude.append(json[v]['Longitude']  )
+            Latitude.append(json[v]['Latitude'])
+
+        #zip these lists into a dict                               
+        track_dict = {
+            "Easting": Easting
+            ,"Northing": Northing
+            ,"Longitude": Longitude
+            ,"Latitude": Latitude
+            }
+
+        return track_dict
 
 
     #test to get run times where necessary
@@ -772,6 +816,7 @@ class TimetableExtractor:
 
         return service_pattern_dict
 
+#here
 
     def produce_stop_level_df_journey(self):
 
@@ -841,6 +886,9 @@ class TimetableExtractor:
         for i in range(0,len(full_data_extract_no_la_code)):
             try:
                 stop_level_list_vehicle_pre = TimetableExtractor.unwrap_vehicle_journey_json(self, full_data_extract_no_la_code['vehicle_journey_json'][i])
+                
+                stop_level_list_vehicle_pre = TimetableExtractor.unwrap_track_json(self, full_data_extract_no_la_code['track_json'][i])
+                
             except:
                 print(full_data_extract_no_la_code['DatasetID'][i], full_data_extract_no_la_code['FileName'][i], 'vehicle extraction error')
                 pass
@@ -888,6 +936,10 @@ class TimetableExtractor:
         for i in range(0,len(full_data_extract_no_la_code)):
             try:
                 stop_level_list_vehicle_pre = TimetableExtractor.unwrap_vehicle_journey_json_for_runtime(self, full_data_extract_no_la_code['vehicle_journey_json'][i])
+                
+                
+                stop_level_list_vehicle_pre = TimetableExtractor.unwrap_track_json(self, full_data_extract_no_la_code['track_json'][i])
+                
             except:
                 # print(full_data_extract_no_la_code['DatasetID'][i], full_data_extract_no_la_code['FileName'][i], 'vehicle for runtime extraction error')
                 stop_level_list_vehicle_pre = {'JourneyPatternRef':'N/A','LineRef':'N/A','journey_pattern_timing_link':'N/A','runtime':'N/A'}
@@ -2155,3 +2207,8 @@ class xmlDataExtractor:
         unique_atco_first_3_letters = list(set(atco_first_3_letters))
         
         return unique_atco_first_3_letters
+    
+
+        
+        
+    
