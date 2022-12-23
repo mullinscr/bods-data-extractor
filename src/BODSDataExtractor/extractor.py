@@ -676,20 +676,24 @@ class TimetableExtractor:
 
         #initiate empty lists for results to be appended to
         VehicleJourneyCode = []
+        BlockNumber=[]
         JourneyPatternRef = []
         DepartureTime = []
         LineRef = []
+
 
         #loop through the VehicleJourney elements within the VehicleJourneys frame
         for v in range(0,len(json)):
             LineRef.append(json[v]['LineRef'])
             VehicleJourneyCode.append(json[v]['VehicleJourneyCode'])
+            BlockNumber.append(json[v]['BlockNumber'])
             JourneyPatternRef.append(json[v]['JourneyPatternRef']  )
             DepartureTime.append(json[v]['DepartureTime'])
 
         #zip these lists into a dict                               
         vehicle_journey_dict = {
             "VehicleJourneyCode": VehicleJourneyCode
+            ,'BlockNumber': BlockNumber
             ,"JourneyPatternRef": JourneyPatternRef
             ,"DepartureTime": DepartureTime
             ,"LineRef": LineRef
@@ -860,10 +864,12 @@ class TimetableExtractor:
 
         #explode out lists in dataframe
         stop_level_df_vehicle = TimetableExtractor.xplode(stop_level_df_vehicle,[
-                                            "VehicleJourneyCode"
+                                            #"VehicleJourneyCode"
+                                            'BlockNumber'
                                             ,"JourneyPatternRef"
                                             ,"DepartureTime"
                                             ,"LineRef"
+
                                               ])
 
         return stop_level_df_vehicle
@@ -1005,9 +1011,9 @@ class TimetableExtractor:
 
 
         #join vehicle stop level data to services (this will allow subsequent join to journey data)
-        stop_level_joined = vehicle_stop_level.merge(service_stop_level[['JourneyPattern_id','JourneyPatternSectionRef','ServiceCode','LineName','RevisionNumber']]
+        stop_level_joined = vehicle_stop_level.merge(service_stop_level[['JourneyPattern_id','JourneyPatternSectionRef','ServiceCode','LineName','RevisionNumber','BlockNumber']]
                                                             ,how='left'
-                                                            ,left_on=['JourneyPatternRef','ServiceCode','LineName','RevisionNumber']
+                                                            ,left_on=['JourneyPatternRef','ServiceCode','LineName','RevisionNumber','BlockNumber']
                                                             ,right_on=['JourneyPattern_id','ServiceCode','LineName','RevisionNumber']).drop_duplicates()
         #remove extra col added in join
         del stop_level_joined['JourneyPattern_id']
@@ -1088,11 +1094,11 @@ class TimetableExtractor:
         stop_level_clean_pivoted['ServiceCode_LineName_RevisionNumber'] = stop_level_clean_pivoted['ServiceCode'] +'_'+ stop_level_clean_pivoted['LineName']  +'_'+ stop_level_clean_pivoted['RevisionNumber']
 
         #select just relevant cols
-        stop_level_clean_pivoted = stop_level_clean_pivoted[['DatasetID','ServiceCode','LineName','RevisionNumber','ServiceCode_LineName_RevisionNumber', 'VehicleJourneyCode','sequence_number','stop_from','runtime']].drop_duplicates()
+        stop_level_clean_pivoted = stop_level_clean_pivoted[['DatasetID','ServiceCode','LineName','RevisionNumber','ServiceCode_LineName_RevisionNumber', 'VehicleJourneyCode','BlockNumber','sequence_number','stop_from','runtime']].drop_duplicates()
                                                              #,'Longitude','Latitude',]].drop_duplicates()
 
         #handle entries where exact same service line revision number combo appears in multiple files - take just the first file's runtime in these cases
-        stop_level_clean_pivoted = stop_level_clean_pivoted.groupby(['DatasetID','ServiceCode_LineName_RevisionNumber','ServiceCode','LineName','RevisionNumber','sequence_number','stop_from','VehicleJourneyCode']).first().reset_index()
+        stop_level_clean_pivoted = stop_level_clean_pivoted.groupby(['DatasetID','ServiceCode_LineName_RevisionNumber','ServiceCode','LineName','RevisionNumber','sequence_number','stop_from','VehicleJourneyCode','BlockNumber']).first().reset_index()
 
         #pivot by vehicle code
         stop_level_clean_pivoted = stop_level_clean_pivoted.pivot(index=['DatasetID','ServiceCode_LineName_RevisionNumber','ServiceCode','LineName','RevisionNumber','sequence_number','stop_from'],columns='VehicleJourneyCode', values = 'runtime')
