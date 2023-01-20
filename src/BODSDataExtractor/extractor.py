@@ -35,7 +35,7 @@ class TimetableExtractor:
 
     error_list = []
 
-    def __init__(self, api_key, limit=10000, nocs=None, status='published', search=None, bods_compliant=True, atco_code=None, service_line_level=False, stop_level=False):
+    def __init__(self, api_key, limit=10000, nocs=None, status='published', search=None, bods_compliant=True, atco_code=None, service_line_level=False, stop_level=False, offset=0):
         self.api_key = api_key
         self.limit = limit
         self.nocs = nocs
@@ -45,6 +45,7 @@ class TimetableExtractor:
         self.atco_code = atco_code
         self.service_line_level = service_line_level
         self.stop_level = stop_level
+        self.offset = offset
         self.pull_timetable_data()
         self.otc_db = otc_db_download.fetch_otc_db()
         
@@ -164,6 +165,7 @@ class TimetableExtractor:
                                             , nocs = self.nocs
                                             , status = self.status
                                             , search = self.search
+                                            , offset = self.offset
                                             )
 
         #set params of get_timetable_datasets method
