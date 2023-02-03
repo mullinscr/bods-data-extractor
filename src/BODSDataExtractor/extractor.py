@@ -28,6 +28,7 @@ from geopandas import GeoDataFrame
 import plotly.express as px
 import plotly.io as pio
 
+import sys
 
 class TimetableExtractor:
 
@@ -46,9 +47,9 @@ class TimetableExtractor:
         self.stop_level = stop_level
         self.pull_timetable_data()
         self.otc_db = otc_db_download.fetch_otc_db()
-
         
-        if service_line_level == True and stop_level == True:
+     
+        if service_line_level is True and stop_level is True:
             self.analytical_timetable_data()
             self.analytical_timetable_data_analysis()
             self.generate_timetable()
@@ -56,27 +57,69 @@ class TimetableExtractor:
             pass
             
 
-        if service_line_level == True and stop_level == False:
+        if service_line_level is True and stop_level is False:
             self.analytical_timetable_data()
             self.analytical_timetable_data_analysis()
         else:
             pass
 
-        if stop_level == True and  service_line_level == False:
+        if stop_level is True and  service_line_level is False:
             self.analytical_timetable_data()
             self.analytical_timetable_data_analysis()
             self.generate_timetable()
 
         # self.service_line_extract = service_line_extract
+        
+        
+        
+    def check_api_response(self, response, apiResponse):
+        
+        #initialise empty message to be appended to
+        message=""
 
+        
+        if apiResponse==False:
+     
+            if response.get("results")==[]:
+                
+                response={'status_code': 404, 'reason': '{"Empty Dataset, due to invalid "NOC" or "status" entered"}'}
+            else:
+                pass
+                
+            
+            #we are extracting the status code (key) and the reason (value) 
+            
+            #checking through items in the api response dictionary
+            for key,value in response.items():
+                content=str(key) +" : "+ str(value)
+                
+                message="\n"+message+str(content)+"\n"
+                
+            raise ValueError(message)
+            
+            
+        
 
     def create_zip_level_timetable_df(self, response):
 
         """This function takes the json api response file 
         and returns it as a pandas dataframe"""
 
+        
         j = response.json()
-        j1 = json.loads(j)
+        j1 = json.loads(j)   
+        
+        #checking the json api response to check the length of the response is invalid or we have an empty dataset
+        
+        if len(j1)<4 or j1.get("results")==[] :
+            
+        
+            apiResponse=False
+            
+            self.check_api_response(j1, apiResponse)
+        
+        else:
+            pass
         df = pd.json_normalize(j1['results'])
         return df
 
@@ -195,13 +238,16 @@ class TimetableExtractor:
         """
         Download a ZIP file and extract the relevant contents
         of each xml file within into a dataframe
-
         """
 
         output = []
 
         print(f"Fetching zip file from {url} in metadata table...\n")
+        
+
+        
         response = requests.get(url)
+        
 
         #unizp the zipfile
         with zipfile.ZipFile(io.BytesIO(response.content)) as thezip:
@@ -264,7 +310,12 @@ class TimetableExtractor:
                             
                             operating_days = xmlDataExtractor.extract_operating_days(xml_data)
                             xml_output.append(operating_days)
-
+                            
+                            block_provided= xmlDataExtractor.extract_blocks(xml_data)
+                            xml_output.append(block_provided)
+                            
+                            tracks_provided=xmlDataExtractor.extract_tracks(xml_data)
+                            xml_output.append(tracks_provided)
 
                             service_origin = xmlDataExtractor.extract_service_origin(xml_data)
                             xml_output.append(service_origin)
@@ -291,7 +342,7 @@ class TimetableExtractor:
 
                             la_code = xmlDataExtractor.extract_la_code(xml_data)
                             xml_output.append(la_code)
-                            
+
                             #reset read cursor
                             thefile.seek(0)
 
@@ -311,13 +362,9 @@ class TimetableExtractor:
 
                                 vehicle_journey_json = xml_json['TransXChange']['VehicleJourneys']['VehicleJourney']
                                 xml_output.append(vehicle_journey_json)
-                                
-                                tracks_json= xml_json['TransXChange']['RouteSections']['RouteSection'] #/RouteLink/Track/Mapping/Location/Translation']#['RouteLink']['Track']['Mapping']['Location']['Translation']
-                                xml_output.append(tracks_json)
 
                                 services_json = xml_json['TransXChange']['Services']['Service']
                                 xml_output.append(services_json)
-                                                      
 
                             else:
                                 pass
@@ -335,11 +382,11 @@ class TimetableExtractor:
         #if stop level data is requested, then need the additional columns that contain jsons of the stop level info        
         if self.stop_level == True:
             output_df = pd.DataFrame(output
-                                 , columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse', 'OperatingDays', 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code','journey_pattern_json', 'vehicle_journey_json','tracks_json','services_json']
+                                 , columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse', 'OperatingDays','BlocksProvided', "TracksProvided", 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code','journey_pattern_json', 'vehicle_journey_json','services_json']
                                  )
         else:
             output_df = pd.DataFrame(output
-                                     , columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse', 'OperatingDays', 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code']
+                                     , columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse', 'OperatingDays','BlocksProvided', "TracksProvided", 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code']
                                      )
         return output_df
 
@@ -351,7 +398,11 @@ class TimetableExtractor:
 
         xml_output = []
         print(f"Fetching xml file from {url} in metadata table...\n")
+        
+        
         resp = requests.get(url)
+        
+        
         resp.encoding = 'utf-8-sig'
 
         #save the filea as an xml then reopen it to parse, this can and should be optimised 
@@ -405,6 +456,11 @@ class TimetableExtractor:
             operating_days = xmlDataExtractor.extract_operating_days(xml_data)
             xml_output.append(operating_days)
             
+            block_provided= xmlDataExtractor.extract_blocks(xml_data)
+            xml_output.append(block_provided)
+
+            tracks_provided=xmlDataExtractor.extract_tracks(xml_data)
+            xml_output.append(tracks_provided)
 
             service_origin = xmlDataExtractor.extract_service_origin(xml_data)
             xml_output.append(service_origin)
@@ -431,7 +487,7 @@ class TimetableExtractor:
 
             la_code = xmlDataExtractor.extract_la_code(xml_data)
             xml_output.append(la_code)
-            
+
             #if stop level data is requested, then need the additional columns that contain jsons of the stop level info        
             if self.stop_level == True:
 
@@ -448,14 +504,9 @@ class TimetableExtractor:
 
                 vehicle_journey_json = xml_json['TransXChange']['VehicleJourneys']['VehicleJourney']
                 xml_output.append(vehicle_journey_json)
-        
-                tracks_json= xml_json['TransXChange']['RouteSections']['RouteSection']#['RouteLink']['Track']['Mapping']['Location']['Translation']
-                xml_output.append(tracks_json)
 
                 services_json = xml_json['TransXChange']['Services']['Service']
                 xml_output.append(services_json)
-                
-                
 
             else:
                 pass
@@ -463,9 +514,9 @@ class TimetableExtractor:
         output_df = pd.DataFrame(xml_output).T
 
         if self.stop_level == True:
-            output_df.columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse','OperatingDays', 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code','journey_pattern_json', 'vehicle_journey_json','tracks_json','services_json']
+            output_df.columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse','OperatingDays','BlocksProvided',"TracksProvided", 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code','journey_pattern_json', 'vehicle_journey_json','services_json']
         else:
-            output_df.columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse','OperatingDays', 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code']
+            output_df.columns = ['URL', 'FileName', 'NOC', 'TradingName', 'LicenceNumber', 'OperatorShortName', 'OperatorCode', 'ServiceCode', 'LineName', 'PublicUse','OperatingDays','BlocksProvided',"TracksProvided", 'Origin', 'Destination', 'OperatingPeriodStartDate', 'OperatingPeriodEndDate', 'SchemaVersion', 'RevisionNumber','la_code']
 
         return output_df
 
@@ -533,6 +584,8 @@ class TimetableExtractor:
                                                                  ,'ServiceCode'
                                                                  ,'PublicUse'
                                                                  ,'OperatingDays'
+                                                                 ,'BlocksProvided'
+                                                                 ,"TracksProvided"
                                                                  ,'Origin'
                                                                  ,'Destination'
                                                                  ,'OperatingPeriodStartDate'
@@ -572,18 +625,80 @@ class TimetableExtractor:
         performance and storage sake. Also omits la_code column, as if user is not interested in 
         local authorities of services then this adds unnecessary duplication (one service line can be in
         multiple las.)
-
         '''
 
         #conditional logic required, as json cols dont exist if stop_level parameter != True
 
         
         if self.stop_level == True:
-            self.service_line_extract = self.service_line_extract_with_stop_level_json.drop(['journey_pattern_json','vehicle_journey_json','tracks_json','services_json','la_code'],axis=1).drop_duplicates()
+            self.service_line_extract = self.service_line_extract_with_stop_level_json.drop(['journey_pattern_json','vehicle_journey_json','services_json','la_code'],axis=1).drop_duplicates()
         else:
             self.service_line_extract = self.service_line_extract_with_stop_level_json.drop(['la_code'],axis=1).drop_duplicates()
-        
+            self.check_for_expired_end_dates()
         return self.service_line_extract
+
+
+
+    def expired_status(date, end_date, today):
+        """
+        Based on the expiry date, a boolean value is assigned to the 'expired' variable, this is
+        then returned back to the 'check_for_expired_end_dates' function.
+        """        
+        
+        expired=False
+        
+        #If the end date is greater or equal to today's date, if so expiry is False 
+        if end_date>=today:
+            expired=False
+                                       
+        #If the end date is less than today's date, if so expiry is True                               
+        elif end_date<today:
+            expired=True
+         
+        #If the date format is not recognised for the "end_date" the above conditions won't be set to true leaving us with an unknown expiry
+        else:
+            print("Date format not recognised, please check the dates in the 'OperatingPeriodEndDate' cloumn" )
+            
+        return(expired)
+            
+            
+    def check_for_expired_end_dates(self):
+
+        """
+        Looks at the 'OperatingPeriodEndDate' column. For every date that's been entered, it 
+        is converted to a "datetime" object and passed on to the expired_status functiom to 
+        determine expiry . A new cloumn is then created and inserted after the OperatingPeriodEndDate 
+        column showing expiry status.
+        """
+        
+        expiredFlag = []
+        
+
+        
+        #convert operating date
+        if self.service_line_level is True:
+            for date in self.service_line_extract['OperatingPeriodEndDate']:
+                if date is None:
+                    expiredFlag.append("No End Date")
+                    continue
+                
+                #Clean Operating Period Date    
+                end_date= datetime.datetime.strptime(date,"%Y-%m-%d")
+                end_date=end_date.strftime("%Y-%m-%d")   
+                    
+                #Clean Today's Date
+                today=datetime.datetime.now()
+                today=today.strftime("%Y-%m-%d")
+                
+                    
+                expiredFlag.append(TimetableExtractor.expired_status(date,end_date,today))
+              
+        #Column is inserted after the operating end date column,        
+        self.service_line_extract.insert( loc=24, column="ExpiredEndDate", value=expiredFlag)
+        
+                            
+        return self.service_line_extract
+
 
 
     def zip_or_xml(self, extension, url):
@@ -636,7 +751,6 @@ class TimetableExtractor:
         stop_from = []
         stop_to = []
         sequence_number = []
-        operating_days=[]
         timingstatus = []
 
         #loop through the JourneyPatternSection elements within the JourneyPatternSections frame
@@ -706,40 +820,6 @@ class TimetableExtractor:
             }
 
         return vehicle_journey_dict
-
-    def unwrap_track_json(self, json):
-
-        """
-        For each record in the service line level table, this function extracts vehicle journey 
-        (specific vehicle depature times) 
-        stop level info by unwrapping the json like structure in the line level table.
-        This is used by the produce_stop_level_df_vehicle function to create a dataframe 
-        of vehicle stop level info.
-        """
-#['RouteLink']['Track']['Mapping']['Location']['Translation']
-
-        #initiate empty lists for results to be appended to
-        Easting = []
-        Northing = []
-        Longitude = []
-        Latitude = []
-
-        #loop through the mapping elements within the track's frame
-        for v in range(0,len(json)):
-            Easting.append(json[v]['Easting'])
-            Northing.append(json[v]['Northing'])
-            Longitude.append(json[v]['Longitude']  )
-            Latitude.append(json[v]['Latitude'])
-
-        #zip these lists into a dict                               
-        track_dict = {
-            "Easting": Easting
-            ,"Northing": Northing
-            ,"Longitude": Longitude
-            ,"Latitude": Latitude
-            }
-
-        return track_dict
 
 
     #test to get run times where necessary
@@ -816,7 +896,6 @@ class TimetableExtractor:
 
         return service_pattern_dict
 
-#here
 
     def produce_stop_level_df_journey(self):
 
@@ -886,9 +965,6 @@ class TimetableExtractor:
         for i in range(0,len(full_data_extract_no_la_code)):
             try:
                 stop_level_list_vehicle_pre = TimetableExtractor.unwrap_vehicle_journey_json(self, full_data_extract_no_la_code['vehicle_journey_json'][i])
-                
-                stop_level_list_vehicle_pre = TimetableExtractor.unwrap_track_json(self, full_data_extract_no_la_code['track_json'][i])
-                
             except:
                 print(full_data_extract_no_la_code['DatasetID'][i], full_data_extract_no_la_code['FileName'][i], 'vehicle extraction error')
                 pass
@@ -936,10 +1012,6 @@ class TimetableExtractor:
         for i in range(0,len(full_data_extract_no_la_code)):
             try:
                 stop_level_list_vehicle_pre = TimetableExtractor.unwrap_vehicle_journey_json_for_runtime(self, full_data_extract_no_la_code['vehicle_journey_json'][i])
-                
-                
-                stop_level_list_vehicle_pre = TimetableExtractor.unwrap_track_json(self, full_data_extract_no_la_code['track_json'][i])
-                
             except:
                 # print(full_data_extract_no_la_code['DatasetID'][i], full_data_extract_no_la_code['FileName'][i], 'vehicle for runtime extraction error')
                 stop_level_list_vehicle_pre = {'JourneyPatternRef':'N/A','LineRef':'N/A','journey_pattern_timing_link':'N/A','runtime':'N/A'}
@@ -1032,11 +1104,9 @@ class TimetableExtractor:
         # url = f"https://naptan.api.dft.gov.uk/v1/access-nodes?atcoAreaCodes={atcos}&dataFormat=csv"
         url = "https://naptan.api.dft.gov.uk/v1/access-nodes?&dataFormat=csv"
 
+        # filter results within call to those needed (just lat and long)
         r = requests.get(url).content
-        naptan = pd.read_csv(io.StringIO(r.decode('utf-8')), low_memory=False)
-
-        #filter results to those needed (just lat and long)
-        naptan = naptan[['ATCOCode','CommonName','Longitude','Latitude']]
+        naptan = pd.read_csv(io.StringIO(r.decode('utf-8')), usecols=['ATCOCode','CommonName','Longitude','Latitude'])
 
         return naptan
 
@@ -1676,13 +1746,12 @@ class TimetableExtractor:
         #try except ensures that this reads in lookup file whether pip installing the library, or cloning the repo from GitHub
         try:
             #import the csv file as a text string from the BODSDataExtractor package
-            atco_lookup_file = importlib.resources.read_text('BODSDataExtractor','ATCO_code_to_LA_lookup.csv')
-            
+            atco_lookup_file = importlib.resources.read_text('BODSDataExtractor',
+                                                             'BODSDataExtractor/ATCO_code_to_LA_lookup.csv')
             #wrap lookup_file string into a stringIO object so it can be read by pandas
             atco_lookup_string = io.StringIO(atco_lookup_file)
 
             la_lookup = pd.read_csv(atco_lookup_string ,dtype={'ATCO Code':str})
-            
         except:
             la_lookup = pd.read_csv('ATCO_code_to_LA_lookup.csv',dtype={'ATCO Code':str})
     
@@ -1705,14 +1774,19 @@ class TimetableExtractor:
         otc_la_merge.rename(columns = {'service_number':'LineName'}, inplace = True)
         
         #merge OTC service level data with BODS service level data
-        full_service_code_with_atco = otc_la_merge[['service_code','LineName','op_name','ATCO Code','in']].add_suffix('_otc').merge(bods_la_merge.add_suffix('_bods'),how='outer',right_on=['ServiceCode_bods','ATCO Code_bods'],left_on=['service_code_otc', 'ATCO Code_otc']).drop_duplicates()
+        full_service_code_with_atco = otc_la_merge[
+            ['service_code', 'LineName', 'op_name', 'ATCO Code', 'in', 'auth_description']].add_suffix('_otc').merge(
+            bods_la_merge.add_suffix('_bods'), how='outer', right_on=['ServiceCode_bods', 'ATCO Code_bods'],
+            left_on=['service_code_otc', 'ATCO Code_otc']).drop_duplicates()
 
         #coalesce service code and atco code cols
         full_service_code_with_atco['service_code'] = full_service_code_with_atco['service_code_otc'].combine_first(full_service_code_with_atco['ServiceCode_bods'])
         full_service_code_with_atco['atco_code'] = full_service_code_with_atco['ATCO Code_otc'].combine_first(full_service_code_with_atco['ATCO Code_bods'])
 
         #keep only necessary cols
-        full_service_code_with_atco = full_service_code_with_atco[['service_code','LineName_otc', 'LineName_bods', 'op_name_otc', 'OperatorName_bods','atco_code','in_otc','in_bods']]
+        full_service_code_with_atco = full_service_code_with_atco[
+            ['service_code', 'LineName_otc', 'LineName_bods', 'op_name_otc', 'OperatorName_bods', 'atco_code', 'in_otc',
+             'in_bods', 'auth_description_otc']]
 
         #add admin area name
         full_service_code_with_atco = full_service_code_with_atco.merge(la_lookup[['Admin Area Name associated with ATCO Code','ATCO Code']],how='left',left_on='atco_code',right_on='ATCO Code').drop_duplicates()
@@ -1728,12 +1802,16 @@ class TimetableExtractor:
         #replace nulls with string so groupby doesnt omit them
         full_service_code_with_atco['LineName_bods'] = full_service_code_with_atco['LineName_bods'].fillna('xxxxx')
         #groupby to concat the bods line nos together
-        full_service_code_with_atco = full_service_code_with_atco.groupby(['service_code','LineName_otc', 'op_name_otc', 'OperatorName_bods','atco_code','in_otc','in_bods','Admin Area Name associated with ATCO Code'], as_index=False, dropna=False).agg({'LineName_bods' : lambda x:','.join(x)})
+        full_service_code_with_atco = full_service_code_with_atco.groupby(
+            ['service_code', 'LineName_otc', 'op_name_otc', 'OperatorName_bods', 'atco_code', 'in_otc', 'in_bods',
+             'auth_description_otc', 'Admin Area Name associated with ATCO Code'], as_index=False, dropna=False).agg(
+            {'LineName_bods': lambda x: ','.join(x)})
         #regenerate the nulls
         full_service_code_with_atco['LineName_bods'] = full_service_code_with_atco['LineName_bods'].replace('xxxxx',None)
         #reorder cols
-        full_service_code_with_atco = full_service_code_with_atco[['service_code','LineName_otc', 'LineName_bods', 'op_name_otc', 'OperatorName_bods','atco_code','in_otc','in_bods','Admin Area Name associated with ATCO Code']]
-
+        full_service_code_with_atco = full_service_code_with_atco[
+            ['service_code', 'LineName_otc', 'LineName_bods', 'op_name_otc', 'OperatorName_bods', 'atco_code', 'in_otc',
+             'in_bods', 'auth_description_otc', 'Admin Area Name associated with ATCO Code']]
         return full_service_code_with_atco
 
     def services_on_bods_or_otc_by_area_mi(self):
@@ -1771,16 +1849,18 @@ class TimetableExtractor:
         #try except ensures that this reads in lookup file whether pip installing the library, or cloning the repo from GitHub
         try:
             #import the csv file as a text string from the BODSDataExtractor package
-            atco_lookup_file = importlib.resources.read_text('BODSDataExtractor','ATCO_code_to_LA_lookup.csv')
-            
+            atco_lookup_file = importlib.resources.read_text('BODSDataExtractor',
+                                                             'BODSDataExtractor/ATCO_code_to_LA_lookup.csv')
             #wrap lookup_file string into a stringIO object so it can be read by pandas
             atco_lookup_string = io.StringIO(atco_lookup_file)
 
             la_lookup = pd.read_csv(atco_lookup_string ,dtype={'ATCO Code':str})
+
+
             
         except:
             la_lookup = pd.read_csv('ATCO_code_to_LA_lookup.csv',dtype={'ATCO Code':str})
-    
+
 
 
         #fetch latest version of OTC database
@@ -1800,14 +1880,19 @@ class TimetableExtractor:
         otc_la_merge.rename(columns = {'service_number':'LineName'}, inplace = True)
         
         #merge OTC service level data with BODS service level data
-        full_service_code_with_atco = otc_la_merge[['service_code','LineName','op_name','ATCO Code','in']].add_suffix('_otc').merge(bods_la_merge.add_suffix('_bods'),how='outer',right_on=['ServiceCode_bods','ATCO Code_bods'],left_on=['service_code_otc', 'ATCO Code_otc']).drop_duplicates()
+        full_service_code_with_atco = otc_la_merge[
+            ['service_code', 'LineName', 'op_name', 'ATCO Code', 'in', 'auth_description']].add_suffix('_otc').merge(
+            bods_la_merge.add_suffix('_bods'), how='outer', right_on=['ServiceCode_bods', 'ATCO Code_bods'],
+            left_on=['service_code_otc', 'ATCO Code_otc']).drop_duplicates()
 
         #coalesce service code and atco code cols
         full_service_code_with_atco['service_code'] = full_service_code_with_atco['service_code_otc'].combine_first(full_service_code_with_atco['ServiceCode_bods'])
         full_service_code_with_atco['atco_code'] = full_service_code_with_atco['ATCO Code_otc'].combine_first(full_service_code_with_atco['ATCO Code_bods'])
 
         #keep only necessary cols
-        full_service_code_with_atco = full_service_code_with_atco[['service_code','LineName_otc', 'LineName_bods', 'op_name_otc', 'OperatorName_bods','atco_code','in_otc','in_bods']]
+        full_service_code_with_atco = full_service_code_with_atco[
+            ['service_code', 'LineName_otc', 'LineName_bods', 'op_name_otc', 'OperatorName_bods', 'atco_code', 'in_otc',
+             'in_bods', 'auth_description_otc']]
 
         #add admin area name
         full_service_code_with_atco = full_service_code_with_atco.merge(la_lookup[['Admin Area Name associated with ATCO Code','ATCO Code']],how='left',left_on='atco_code',right_on='ATCO Code').drop_duplicates()
@@ -1826,12 +1911,16 @@ class TimetableExtractor:
         #replace nulls with string so groupby doesnt omit them
         full_service_code_with_atco['LineName_bods'] = full_service_code_with_atco['LineName_bods'].fillna('xxxxx')
         #groupby to concat the bods line nos together
-        full_service_code_with_atco = full_service_code_with_atco.groupby(['service_code','LineName_otc', 'op_name_otc', 'OperatorName_bods','atco_code','in_otc','in_bods','Admin Area Name associated with ATCO Code'], as_index=False, dropna=False).agg({'LineName_bods' : lambda x:','.join(x)})
+        full_service_code_with_atco = full_service_code_with_atco.groupby(
+            ['service_code', 'LineName_otc', 'op_name_otc', 'OperatorName_bods', 'atco_code', 'in_otc', 'in_bods',
+             'auth_description_otc', 'Admin Area Name associated with ATCO Code'], as_index=False, dropna=False).agg(
+            {'LineName_bods': lambda x: ','.join(x)})
         #regenerate the nulls
         full_service_code_with_atco['LineName_bods'] = full_service_code_with_atco['LineName_bods'].replace('xxxxx',None)
         #reorder cols
-        full_service_code_with_atco = full_service_code_with_atco[['service_code','LineName_otc', 'LineName_bods', 'op_name_otc', 'OperatorName_bods','atco_code','in_otc','in_bods','Admin Area Name associated with ATCO Code']]
-
+        full_service_code_with_atco = full_service_code_with_atco[
+            ['service_code', 'LineName_otc', 'LineName_bods', 'op_name_otc', 'OperatorName_bods', 'atco_code', 'in_otc',
+             'in_bods', 'auth_description_otc', 'Admin Area Name associated with ATCO Code']]
         return full_service_code_with_atco
 
     def services_on_bods_or_otc_by_area_mi_just_otc(self):
@@ -1999,16 +2088,51 @@ class xmlDataExtractor:
         
         return public_use
     
+    def extract_blocks(self):
+        
+        data=self.root.findall("VehicleJourneys//VehicleJourney/Operational/Block" , self.namespace)
+        
+        if data==[]:
+            block_provided=False
+        else:
+            block_provided=True
+            
+        block_provided=[block_provided]
+        
+        return block_provided
+    
+    
+    def extract_tracks(self):
+        
+        data=self.root.findall("RouteSections//RouteSection/RouteLink/Track" , self.namespace)
+        
+        if data==[]:
+            tracks_provided=False
+        else:
+            tracks_provided=True
+            
+        tracks_provided=[tracks_provided]
+        
+        return tracks_provided
+        
+        
+    
     def extract_operating_days(self):
         
         '''
         Extracts the regular operating days from an xml file in a given location with a known namespace.
         Namespace can be found in constants.py and depends on if data is timetable or fares data
-
         
         '''
         #find all text in the given xpath, return as a element object
-        data = self.root.findall("VehicleJourneys//VehicleJourney/OperatingProfile/RegularDayType/DaysOfWeek/", self.namespace)
+        #Check service line level first
+        data = self.root.findall("Services//Service/OperatingProfile/RegularDayType/DaysOfWeek/", self.namespace)
+        
+        #if empty we proceed to service line level
+        if data==[]:
+            data = self.root.findall("VehicleJourneys//VehicleJourney/OperatingProfile/RegularDayType/DaysOfWeek/", self.namespace)
+        else:
+            pass
 
         daysoperating=[]
         
@@ -2207,8 +2331,3 @@ class xmlDataExtractor:
         unique_atco_first_3_letters = list(set(atco_first_3_letters))
         
         return unique_atco_first_3_letters
-    
-
-        
-        
-    
